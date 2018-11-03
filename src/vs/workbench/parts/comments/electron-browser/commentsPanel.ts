@@ -7,7 +7,6 @@ import 'vs/css!./media/panel';
 import * as dom from 'vs/base/browser/dom';
 import { IAction } from 'vs/base/common/actions';
 import { debounceEvent } from 'vs/base/common/event';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { CollapseAllAction, DefaultAccessibilityProvider, DefaultController, DefaultDragAndDrop } from 'vs/base/parts/tree/browser/treeDefaults';
 import { isCodeEditor, isDiffEditor } from 'vs/editor/browser/editorBrowser';
 import { CommentThreadChangedEvent } from 'vs/editor/common/modes';
@@ -22,6 +21,9 @@ import { CommentsDataFilter, CommentsDataSource, CommentsModelRenderer } from 'v
 import { ICommentService, IWorkspaceCommentThreadsEvent } from 'vs/workbench/parts/comments/electron-browser/commentService';
 import { IEditorService, ACTIVE_GROUP, SIDE_GROUP } from 'vs/workbench/services/editor/common/editorService';
 import { ICommandService } from 'vs/platform/commands/common/commands';
+import { textLinkForeground, textLinkActiveForeground, focusBorder } from 'vs/platform/theme/common/colorRegistry';
+import { IOpenerService } from 'vs/platform/opener/common/opener';
+import { IStorageService } from 'vs/platform/storage/common/storage';
 
 export const COMMENTS_PANEL_ID = 'workbench.panel.comments';
 export const COMMENTS_PANEL_TITLE = 'Comments';
@@ -39,13 +41,15 @@ export class CommentsPanel extends Panel {
 		@ICommentService private commentService: ICommentService,
 		@IEditorService private editorService: IEditorService,
 		@ICommandService private commandService: ICommandService,
+		@IOpenerService private openerService: IOpenerService,
 		@ITelemetryService telemetryService: ITelemetryService,
-		@IThemeService themeService: IThemeService
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService
 	) {
-		super(COMMENTS_PANEL_ID, telemetryService, themeService);
+		super(COMMENTS_PANEL_ID, telemetryService, themeService, storageService);
 	}
 
-	public create(parent: HTMLElement): TPromise<void> {
+	public create(parent: HTMLElement): void {
 		super.create(parent);
 
 		dom.addClass(parent, 'comments-panel');
@@ -60,14 +64,41 @@ export class CommentsPanel extends Panel {
 		this.commentService.onDidSetAllCommentThreads(this.onAllCommentsChanged, this);
 		this.commentService.onDidUpdateCommentThreads(this.onCommentsUpdated, this);
 
-		return this.render();
+		const styleElement = dom.createStyleSheet(parent);
+		this.applyStyles(styleElement);
+		this.themeService.onThemeChange(_ => {
+			this.applyStyles(styleElement);
+		});
+
+		this.render();
 	}
 
-	private render(): TPromise<void> {
+	private applyStyles(styleElement: HTMLStyleElement) {
+		const content: string[] = [];
+
+		const theme = this.themeService.getTheme();
+		const linkColor = theme.getColor(textLinkForeground);
+		if (linkColor) {
+			content.push(`.comments-panel .comments-panel-container a { color: ${linkColor}; }`);
+		}
+
+		const linkActiveColor = theme.getColor(textLinkActiveForeground);
+		if (linkActiveColor) {
+			content.push(`.comments-panel .comments-panel-container a:hover, a:active { color: ${linkActiveColor}; }`);
+		}
+
+		const focusColor = theme.getColor(focusBorder);
+		if (focusColor) {
+			content.push(`.comments-panel .commenst-panel-container a:focus { outline-color: ${focusColor}; }`);
+		}
+
+		styleElement.innerHTML = content.join('\n');
+	}
+
+	private async render(): Promise<void> {
 		dom.toggleClass(this.treeContainer, 'hidden', !this.commentsModel.hasCommentThreads());
-		return this.tree.setInput(this.commentsModel).then(() => {
-			this.renderMessage();
-		});
+		await this.tree.setInput(this.commentsModel);
+		this.renderMessage();
 	}
 
 	public getActions(): IAction[] {
@@ -101,7 +132,7 @@ export class CommentsPanel extends Panel {
 	private createTree(): void {
 		this.tree = this.instantiationService.createInstance(WorkbenchTree, this.treeContainer, {
 			dataSource: new CommentsDataSource(),
-			renderer: new CommentsModelRenderer(this.instantiationService),
+			renderer: new CommentsModelRenderer(this.instantiationService, this.openerService),
 			accessibilityProvider: new DefaultAccessibilityProvider,
 			controller: new DefaultController(),
 			dnd: new DefaultDragAndDrop(),
@@ -136,29 +167,18 @@ export class CommentsPanel extends Panel {
 			const control = this.editorService.activeTextEditorWidget;
 			if (threadToReveal && isCodeEditor(control)) {
 				const controller = ReviewController.get(control);
-				controller.revealCommentThread(threadToReveal, commentToReveal);
+				controller.revealCommentThread(threadToReveal, commentToReveal, false);
 			}
 
 			return true;
 		}
 
 
-		let setCommentsForFile = new Promise((resolve, reject) => {
-			this.commentService.onDidSetResourceCommentInfos(e => {
-				if (e.resource.toString() === element.resource.toString()) {
-					resolve();
-				}
-			});
-		});
-
 		const threadToReveal = element instanceof ResourceWithCommentThreads ? element.commentThreads[0].threadId : element.threadId;
 		const commentToReveal = element instanceof ResourceWithCommentThreads ? element.commentThreads[0].comment : element.comment;
 
 		if (commentToReveal.command) {
-			Promise.all([
-				this.commandService.executeCommand(commentToReveal.command.id, ...commentToReveal.command.arguments),
-				setCommentsForFile
-			]).then(_ => {
+			this.commandService.executeCommand(commentToReveal.command.id, ...commentToReveal.command.arguments).then(_ => {
 				let activeWidget = this.editorService.activeTextEditorWidget;
 				if (isDiffEditor(activeWidget)) {
 					const originalEditorWidget = activeWidget.getOriginalEditor();
@@ -172,7 +192,7 @@ export class CommentsPanel extends Panel {
 					}
 
 					if (controller) {
-						controller.revealCommentThread(threadToReveal, commentToReveal.commentId);
+						controller.revealCommentThread(threadToReveal, commentToReveal.commentId, true);
 					}
 				} else {
 					let activeEditor = this.editorService.activeEditor;
@@ -181,7 +201,7 @@ export class CommentsPanel extends Panel {
 						const control = this.editorService.activeTextEditorWidget;
 						if (threadToReveal && isCodeEditor(control)) {
 							const controller = ReviewController.get(control);
-							controller.revealCommentThread(threadToReveal, commentToReveal.commentId);
+							controller.revealCommentThread(threadToReveal, commentToReveal.commentId, true);
 						}
 					}
 				}
@@ -189,27 +209,33 @@ export class CommentsPanel extends Panel {
 				return true;
 			});
 		} else {
-			Promise.all([this.editorService.openEditor({
+			this.editorService.openEditor({
 				resource: element.resource,
 				options: {
 					pinned: pinned,
 					preserveFocus: preserveFocus,
 					selection: range
 				}
-			}, sideBySide ? SIDE_GROUP : ACTIVE_GROUP), setCommentsForFile]).then(vals => {
-				let editor = vals[0];
+			}, sideBySide ? SIDE_GROUP : ACTIVE_GROUP).then(editor => {
 				const control = editor.getControl();
 				if (threadToReveal && isCodeEditor(control)) {
 					const controller = ReviewController.get(control);
-					console.log(commentToReveal.command);
-					controller.revealCommentThread(threadToReveal, commentToReveal.commentId);
+					controller.revealCommentThread(threadToReveal, commentToReveal.commentId, true);
 				}
-				setCommentsForFile = null;
 			});
 		}
 
-
 		return true;
+	}
+
+	public setVisible(visible: boolean): void {
+		const wasVisible = this.isVisible();
+		super.setVisible(visible);
+		if (this.isVisible()) {
+			if (!wasVisible) {
+				this.refresh();
+			}
+		}
 	}
 
 	private refresh(): void {
@@ -231,7 +257,9 @@ export class CommentsPanel extends Panel {
 	}
 
 	private onCommentsUpdated(e: CommentThreadChangedEvent): void {
-		this.commentsModel.updateCommentThreads(e);
-		this.refresh();
+		const didUpdate = this.commentsModel.updateCommentThreads(e);
+		if (didUpdate) {
+			this.refresh();
+		}
 	}
 }

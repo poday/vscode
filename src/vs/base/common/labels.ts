@@ -2,9 +2,8 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
-import URI from 'vs/base/common/uri';
+import { URI } from 'vs/base/common/uri';
 import { nativeSep, normalize, basename as pathsBasename, sep } from 'vs/base/common/paths';
 import { endsWith, ltrim, startsWithIgnoreCase, rtrim, startsWith } from 'vs/base/common/strings';
 import { Schemas } from 'vs/base/common/network';
@@ -23,37 +22,33 @@ export interface IUserHomeProvider {
 }
 
 /**
- * @param resource for which to compute the path label
- * @param userHomeProvider if a resource has a file schema userHomeProvider is used for tildifiying the label
- * @param rootProvider only passed in if the label should be relative to the workspace root
+ * @deprecated use LabelService instead
  */
-export function getPathLabel(resource: URI | string, userHomeProvider: IUserHomeProvider, rootProvider?: IWorkspaceFolderProvider): string {
-	if (!resource) {
-		return null;
-	}
-
+export function getPathLabel(resource: URI | string, userHomeProvider?: IUserHomeProvider, rootProvider?: IWorkspaceFolderProvider): string {
 	if (typeof resource === 'string') {
 		resource = URI.file(resource);
 	}
 
 	// return early if we can resolve a relative path label from the root
-	const baseResource = rootProvider ? rootProvider.getWorkspaceFolder(resource) : null;
-	if (baseResource) {
-		const hasMultipleRoots = rootProvider.getWorkspace().folders.length > 1;
+	if (rootProvider) {
+		const baseResource = rootProvider.getWorkspaceFolder(resource);
+		if (baseResource) {
+			const hasMultipleRoots = rootProvider.getWorkspace().folders.length > 1;
 
-		let pathLabel: string;
-		if (isEqual(baseResource.uri, resource, !isLinux)) {
-			pathLabel = ''; // no label if paths are identical
-		} else {
-			pathLabel = normalize(ltrim(resource.path.substr(baseResource.uri.path.length), sep), true);
+			let pathLabel: string;
+			if (isEqual(baseResource.uri, resource, !isLinux)) {
+				pathLabel = ''; // no label if paths are identical
+			} else {
+				pathLabel = normalize(ltrim(resource.path.substr(baseResource.uri.path.length), sep)!, true);
+			}
+
+			if (hasMultipleRoots) {
+				const rootName = (baseResource && baseResource.name) ? baseResource.name : pathsBasename(baseResource.uri.fsPath);
+				pathLabel = pathLabel ? (rootName + ' • ' + pathLabel) : rootName; // always show root basename if there are multiple
+			}
+
+			return pathLabel;
 		}
-
-		if (hasMultipleRoots) {
-			const rootName = (baseResource && baseResource.name) ? baseResource.name : pathsBasename(baseResource.uri.fsPath);
-			pathLabel = pathLabel ? (rootName + ' • ' + pathLabel) : rootName; // always show root basename if there are multiple
-		}
-
-		return pathLabel;
 	}
 
 	// return if the resource is neither file:// nor untitled:// and no baseResource was provided
@@ -75,16 +70,16 @@ export function getPathLabel(resource: URI | string, userHomeProvider: IUserHome
 	return res;
 }
 
-export function getBaseLabel(resource: URI | string): string {
+export function getBaseLabel(resource: URI | string): string | undefined {
 	if (!resource) {
-		return null;
+		return undefined;
 	}
 
 	if (typeof resource === 'string') {
 		resource = URI.file(resource);
 	}
 
-	const base = pathsBasename(resource.fsPath) || resource.fsPath /* can be empty string if '/' is passed in */;
+	const base = pathsBasename(resource.path) || (resource.scheme === Schemas.file ? resource.fsPath : resource.path) /* can be empty string if '/' is passed in */;
 
 	// convert c: => C:
 	if (hasDriveLetter(base)) {
@@ -95,7 +90,7 @@ export function getBaseLabel(resource: URI | string): string {
 }
 
 function hasDriveLetter(path: string): boolean {
-	return isWindows && path && path[1] === ':';
+	return !!(isWindows && path && path[1] === ':');
 }
 
 export function normalizeDriveLetter(path: string): string {

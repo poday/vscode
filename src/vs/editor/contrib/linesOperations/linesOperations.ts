@@ -2,27 +2,28 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-'use strict';
 
 import * as nls from 'vs/nls';
-import { KeyCode, KeyMod, KeyChord } from 'vs/base/common/keyCodes';
-import { SortLinesCommand } from 'vs/editor/contrib/linesOperations/sortLinesCommand';
-import { EditOperation } from 'vs/editor/common/core/editOperation';
-import { TrimTrailingWhitespaceCommand } from 'vs/editor/common/commands/trimTrailingWhitespaceCommand';
-import { ICommand } from 'vs/editor/common/editorCommon';
-import { IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
-import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
-import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from 'vs/editor/common/commands/replaceCommand';
-import { Range } from 'vs/editor/common/core/range';
-import { Selection } from 'vs/editor/common/core/selection';
-import { Position } from 'vs/editor/common/core/position';
-import { registerEditorAction, ServicesAccessor, IActionOptions, EditorAction } from 'vs/editor/browser/editorExtensions';
-import { CopyLinesCommand } from './copyLinesCommand';
-import { DeleteLinesCommand } from './deleteLinesCommand';
-import { MoveLinesCommand } from './moveLinesCommand';
-import { TypeOperations } from 'vs/editor/common/controller/cursorTypeOperations';
+import { KeyChord, KeyCode, KeyMod } from 'vs/base/common/keyCodes';
 import { CoreEditingCommands } from 'vs/editor/browser/controller/coreCommands';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
+import { EditorAction, IActionOptions, ServicesAccessor, registerEditorAction } from 'vs/editor/browser/editorExtensions';
+import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from 'vs/editor/common/commands/replaceCommand';
+import { TrimTrailingWhitespaceCommand } from 'vs/editor/common/commands/trimTrailingWhitespaceCommand';
+import { TypeOperations } from 'vs/editor/common/controller/cursorTypeOperations';
+import { EditOperation } from 'vs/editor/common/core/editOperation';
+import { Position } from 'vs/editor/common/core/position';
+import { Range } from 'vs/editor/common/core/range';
+import { Selection } from 'vs/editor/common/core/selection';
+import { ICommand } from 'vs/editor/common/editorCommon';
+import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
+import { IIdentifiedSingleEditOperation } from 'vs/editor/common/model';
+import { CopyLinesCommand } from 'vs/editor/contrib/linesOperations/copyLinesCommand';
+import { DeleteLinesCommand } from 'vs/editor/contrib/linesOperations/deleteLinesCommand';
+import { MoveLinesCommand } from 'vs/editor/contrib/linesOperations/moveLinesCommand';
+import { SortLinesCommand } from 'vs/editor/contrib/linesOperations/sortLinesCommand';
+import { MenuId } from 'vs/platform/actions/common/actions';
+import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 
 // copy lines
 
@@ -38,7 +39,7 @@ abstract class AbstractCopyLinesAction extends EditorAction {
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 
 		let commands: ICommand[] = [];
-		let selections = editor.getSelections();
+		let selections = editor.getSelections() || [];
 
 		for (let i = 0; i < selections.length; i++) {
 			commands.push(new CopyLinesCommand(selections[i], this.down));
@@ -60,7 +61,14 @@ class CopyLinesUpAction extends AbstractCopyLinesAction {
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
 				primary: KeyMod.Alt | KeyMod.Shift | KeyCode.UpArrow,
-				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.UpArrow }
+				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.UpArrow },
+				weight: KeybindingWeight.EditorContrib
+			},
+			menubarOpts: {
+				menuId: MenuId.MenubarSelectionMenu,
+				group: '2_line',
+				title: nls.localize({ key: 'miCopyLinesUp', comment: ['&& denotes a mnemonic'] }, "&&Copy Line Up"),
+				order: 1
 			}
 		});
 	}
@@ -76,7 +84,14 @@ class CopyLinesDownAction extends AbstractCopyLinesAction {
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
 				primary: KeyMod.Alt | KeyMod.Shift | KeyCode.DownArrow,
-				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.DownArrow }
+				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.DownArrow },
+				weight: KeybindingWeight.EditorContrib
+			},
+			menubarOpts: {
+				menuId: MenuId.MenubarSelectionMenu,
+				group: '2_line',
+				title: nls.localize({ key: 'miCopyLinesDown', comment: ['&& denotes a mnemonic'] }, "Co&&py Line Down"),
+				order: 2
 			}
 		});
 	}
@@ -96,7 +111,7 @@ abstract class AbstractMoveLinesAction extends EditorAction {
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 
 		let commands: ICommand[] = [];
-		let selections = editor.getSelections();
+		let selections = editor.getSelections() || [];
 		let autoIndent = editor.getConfiguration().autoIndent;
 
 		for (let i = 0; i < selections.length; i++) {
@@ -119,7 +134,14 @@ class MoveLinesUpAction extends AbstractMoveLinesAction {
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
 				primary: KeyMod.Alt | KeyCode.UpArrow,
-				linux: { primary: KeyMod.Alt | KeyCode.UpArrow }
+				linux: { primary: KeyMod.Alt | KeyCode.UpArrow },
+				weight: KeybindingWeight.EditorContrib
+			},
+			menubarOpts: {
+				menuId: MenuId.MenubarSelectionMenu,
+				group: '2_line',
+				title: nls.localize({ key: 'miMoveLinesUp', comment: ['&& denotes a mnemonic'] }, "Mo&&ve Line Up"),
+				order: 3
 			}
 		});
 	}
@@ -135,7 +157,14 @@ class MoveLinesDownAction extends AbstractMoveLinesAction {
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
 				primary: KeyMod.Alt | KeyCode.DownArrow,
-				linux: { primary: KeyMod.Alt | KeyCode.DownArrow }
+				linux: { primary: KeyMod.Alt | KeyCode.DownArrow },
+				weight: KeybindingWeight.EditorContrib
+			},
+			menubarOpts: {
+				menuId: MenuId.MenubarSelectionMenu,
+				group: '2_line',
+				title: nls.localize({ key: 'miMoveLinesDown', comment: ['&& denotes a mnemonic'] }, "Move &&Line Down"),
+				order: 4
 			}
 		});
 	}
@@ -150,7 +179,7 @@ export abstract class AbstractSortLinesAction extends EditorAction {
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-		const selections = editor.getSelections();
+		const selections = editor.getSelections() || [];
 
 		for (let i = 0, len = selections.length; i < len; i++) {
 			const selection = selections[i];
@@ -204,7 +233,8 @@ export class TrimTrailingWhitespaceAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
-				primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyCode.KEY_X)
+				primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyCode.KEY_X),
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -216,7 +246,7 @@ export class TrimTrailingWhitespaceAction extends EditorAction {
 			// See https://github.com/editorconfig/editorconfig-vscode/issues/47
 			// It is very convenient for the editor config extension to invoke this action.
 			// So, if we get a reason:'auto-save' passed in, let's preserve cursor positions.
-			cursors = editor.getSelections().map(s => new Position(s.positionLineNumber, s.positionColumn));
+			cursors = (editor.getSelections() || []).map(s => new Position(s.positionLineNumber, s.positionColumn));
 		}
 
 		let command = new TrimTrailingWhitespaceCommand(editor.getSelection(), cursors);
@@ -245,7 +275,8 @@ class DeleteLinesAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.textInputFocus,
-				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KEY_K
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KEY_K,
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -314,14 +345,19 @@ export class IndentLinesAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
-				primary: KeyMod.CtrlCmd | KeyCode.US_CLOSE_SQUARE_BRACKET
+				primary: KeyMod.CtrlCmd | KeyCode.US_CLOSE_SQUARE_BRACKET,
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const cursors = editor._getCursors();
+		if (!cursors) {
+			return;
+		}
 		editor.pushUndoStop();
-		editor.executeCommands(this.id, TypeOperations.indent(editor._getCursorConfiguration(), editor.getModel(), editor.getSelections()));
+		editor.executeCommands(this.id, TypeOperations.indent(cursors.context.config, editor.getModel(), editor.getSelections()));
 		editor.pushUndoStop();
 	}
 }
@@ -335,7 +371,8 @@ class OutdentLinesAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
-				primary: KeyMod.CtrlCmd | KeyCode.US_OPEN_SQUARE_BRACKET
+				primary: KeyMod.CtrlCmd | KeyCode.US_OPEN_SQUARE_BRACKET,
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -354,14 +391,19 @@ export class InsertLineBeforeAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
-				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Enter
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Enter,
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const cursors = editor._getCursors();
+		if (!cursors) {
+			return;
+		}
 		editor.pushUndoStop();
-		editor.executeCommands(this.id, TypeOperations.lineInsertBefore(editor._getCursorConfiguration(), editor.getModel(), editor.getSelections()));
+		editor.executeCommands(this.id, TypeOperations.lineInsertBefore(cursors.context.config, editor.getModel(), editor.getSelections()));
 	}
 }
 
@@ -374,14 +416,19 @@ export class InsertLineAfterAction extends EditorAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
-				primary: KeyMod.CtrlCmd | KeyCode.Enter
+				primary: KeyMod.CtrlCmd | KeyCode.Enter,
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const cursors = editor._getCursors();
+		if (!cursors) {
+			return;
+		}
 		editor.pushUndoStop();
-		editor.executeCommands(this.id, TypeOperations.lineInsertAfter(editor._getCursorConfiguration(), editor.getModel(), editor.getSelections()));
+		editor.executeCommands(this.id, TypeOperations.lineInsertAfter(cursors.context.config, editor.getModel(), editor.getSelections()));
 	}
 }
 
@@ -433,8 +480,9 @@ export class DeleteAllLeftAction extends AbstractDeleteAllToBoundaryAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.textInputFocus,
-				primary: null,
-				mac: { primary: KeyMod.CtrlCmd | KeyCode.Backspace }
+				primary: 0,
+				mac: { primary: KeyMod.CtrlCmd | KeyCode.Backspace },
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -501,8 +549,9 @@ export class DeleteAllRightAction extends AbstractDeleteAllToBoundaryAction {
 			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				kbExpr: EditorContextKeys.textInputFocus,
-				primary: null,
-				mac: { primary: KeyMod.WinCtrl | KeyCode.KEY_K, secondary: [KeyMod.CtrlCmd | KeyCode.Delete] }
+				primary: 0,
+				mac: { primary: KeyMod.WinCtrl | KeyCode.KEY_K, secondary: [KeyMod.CtrlCmd | KeyCode.Delete] },
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -559,7 +608,8 @@ export class JoinLinesAction extends EditorAction {
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus,
 				primary: 0,
-				mac: { primary: KeyMod.WinCtrl | KeyCode.KEY_J }
+				mac: { primary: KeyMod.WinCtrl | KeyCode.KEY_J },
+				weight: KeybindingWeight.EditorContrib
 			}
 		});
 	}
@@ -599,8 +649,8 @@ export class JoinLinesAction extends EditorAction {
 		reducedSelections.push(lastSelection);
 
 		let model = editor.getModel();
-		let edits = [];
-		let endCursorState = [];
+		let edits: IIdentifiedSingleEditOperation[] = [];
+		let endCursorState: Selection[] = [];
 		let endPrimaryCursor = primaryCursor;
 		let lineOffset = 0;
 

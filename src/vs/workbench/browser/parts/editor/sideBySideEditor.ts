@@ -17,6 +17,7 @@ import { CancellationToken } from 'vs/base/common/cancellation';
 import { IEditorGroup } from 'vs/workbench/services/group/common/editorGroupsService';
 import { SplitView, Sizing, Orientation } from 'vs/base/browser/ui/splitview/splitview';
 import { Event, Relay, anyEvent, mapEvent, Emitter } from 'vs/base/common/event';
+import { IStorageService } from 'vs/platform/storage/common/storage';
 
 export class SideBySideEditor extends BaseEditor {
 
@@ -54,14 +55,15 @@ export class SideBySideEditor extends BaseEditor {
 
 	private onDidCreateEditors = this._register(new Emitter<{ width: number; height: number; }>());
 	private _onDidSizeConstraintsChange = this._register(new Relay<{ width: number; height: number; }>());
-	get onDidSizeConstraintsChange(): Event<{ width: number; height: number; }> { return anyEvent(this.onDidCreateEditors.event, this._onDidSizeConstraintsChange.event); }
+	readonly onDidSizeConstraintsChange: Event<{ width: number; height: number; }> = anyEvent(this.onDidCreateEditors.event, this._onDidSizeConstraintsChange.event);
 
 	constructor(
 		@ITelemetryService telemetryService: ITelemetryService,
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@IThemeService themeService: IThemeService
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService
 	) {
-		super(SideBySideEditor.ID, telemetryService, themeService);
+		super(SideBySideEditor.ID, telemetryService, themeService, storageService);
 	}
 
 	protected createEditor(parent: HTMLElement): void {
@@ -107,9 +109,11 @@ export class SideBySideEditor extends BaseEditor {
 		if (this.masterEditor) {
 			this.masterEditor.setVisible(visible, group);
 		}
+
 		if (this.detailsEditor) {
 			this.detailsEditor.setVisible(visible, group);
 		}
+
 		super.setEditorVisible(visible, group);
 	}
 
@@ -117,10 +121,13 @@ export class SideBySideEditor extends BaseEditor {
 		if (this.masterEditor) {
 			this.masterEditor.clearInput();
 		}
+
 		if (this.detailsEditor) {
 			this.detailsEditor.clearInput();
 		}
+
 		this.disposeEditors();
+
 		super.clearInput();
 	}
 
@@ -139,6 +146,7 @@ export class SideBySideEditor extends BaseEditor {
 		if (this.masterEditor) {
 			return this.masterEditor.getControl();
 		}
+
 		return null;
 	}
 
@@ -159,7 +167,10 @@ export class SideBySideEditor extends BaseEditor {
 			return this.setNewInput(newInput, options, token);
 		}
 
-		return TPromise.join([this.detailsEditor.setInput(newInput.details, null, token), this.masterEditor.setInput(newInput.master, options, token)]).then(() => void 0);
+		return Promise.all([
+			this.detailsEditor.setInput(newInput.details, null, token),
+			this.masterEditor.setInput(newInput.master, options, token)]
+		).then(() => void 0);
 	}
 
 	private setNewInput(newInput: SideBySideEditorInput, options: EditorOptions, token: CancellationToken): Thenable<void> {
@@ -190,7 +201,7 @@ export class SideBySideEditor extends BaseEditor {
 
 		this.onDidCreateEditors.fire();
 
-		return TPromise.join([this.detailsEditor.setInput(detailsInput, null, token), this.masterEditor.setInput(masterInput, options, token)]).then(() => this.focus());
+		return Promise.all([this.detailsEditor.setInput(detailsInput, null, token), this.masterEditor.setInput(masterInput, options, token)]).then(() => this.focus());
 	}
 
 	updateStyles(): void {
